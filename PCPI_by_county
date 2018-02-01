@@ -1,0 +1,52 @@
+from fred import Fred
+import pandas as pd
+import time
+fr = Fred(api_key='Your API key',response_type='df')
+#%% #%% PCPI
+state_id = fr.category.children(27281)['id'] ## states category id: 27281, to get all the state's ids
+state_nms = fr.category.children(27281)['name']# names of al lthe states
+
+columns=['State','County','PCPI']
+df_PCPI=pd.DataFrame(columns=columns)
+dummy=[]
+start_time = time.time()
+for i in range(state_id.size):                                           # loop to iterate each state    
+    state_children = fr.category.children(state_id[i])                   # To get df containing counties' list id and MSA id    
+    if state_children.empty:
+        print(state_nms[i],'Does not have any divisons')
+        continue
+    if sum(state_children['name'] == 'Counties')==0 and sum(state_children['name']=='Parishes')==0:
+        continue                                                               # if there is no county wise devision(like Alaska), we go to the next state
+    if sum(state_children['name'] == 'Parishes')==1:
+        county_id=state_children.loc[state_children['name'] == 'Parishes']['id'][0]
+    if sum(state_children['name'] == 'Counties')==1:
+        county_id=state_children.loc[state_children['name'] == 'Counties']['id'][0]# To retrive the counties ids           county_id=state_children.loc[state_children['name'] == 'Parishes']['id'][0]    
+
+    if fr.category.children(county_id).empty:                                  # If there are no counties, then we consider the whole state and look for PCPI
+        county_ids=pd.Series(state_id[i])
+        county_nms=pd.Series(state_nms[i])
+    else:
+        county_ids=fr.category.children(county_id)['id']                  # to list the ids of all the  counties
+        county_nms=fr.category.children(county_id)['name']                # to list the ids of all the  counties
+    for k in range(county_ids.size):                                      # to iterate over each county
+        county_series=fr.category.series(county_ids[k])                   # DF for all the series available for the county
+        series=county_series.loc[county_series['id'].str.contains('PCPI')]# extracting row contaiing PCPI
+        if series.empty:
+            print(county_nms[k],'in',state_nms[i],'does not have PCPI data')
+            continue                                                      #if the county does not have PCPI, we go to next county
+        series_id=series.iloc[0]['id']                                    # extracting the id of the series
+        obs=fr.series.observations(series_id)['value']                    # extracting the values of the series
+        final_val=obs[obs.size-1]                                         # extracting the latest value
+        values_append=[state_nms[i],county_nms[k],final_val]              # putting together the correponding values
+        #print(values_append)
+        dummy.append(values_append)                                       # appedning all the values to the list
+
+end_time = time.time()
+print("total time taken this loop: ", end_time - start_time)
+PCPI_cnts=pd.DataFrame(dummy,columns=['State','County','PCPI'])           # Changing the list to a dataframe        
+PCPI_cnts.to_csv('PCPI_cnts.csv')                                         # writing the df to csv
+
+#%%
+
+
+
